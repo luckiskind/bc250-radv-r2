@@ -1,0 +1,166 @@
+diff --git a/libs/vkd3d/device.c b/libs/vkd3d/device.c
+index 6c713c90..1a13c153 100644
+--- a/libs/vkd3d/device.c
++++ b/libs/vkd3d/device.c
+@@ -1814,7 +1814,19 @@ static void vkd3d_physical_device_info_apply_workarounds(struct vkd3d_physical_d
+      * Unfortunately, we don't know of a robust way to detect UE5, so have to apply this globally.
+      * Similarly, Intel Arc does not expose barycentrics, but does expose mesh shaders ...
+      * Unclear if that will ever be resolved. */
+-    if (vkd3d_application_feature_override != VKD3D_APPLICATION_FEATURE_MESH_SHADER_WITHOUT_BARYCENTRICS &&
++    /* Experimental BC250 opt-in: preserve real mesh/task features without
++     * claiming barycentric support. Keep application-specific workarounds. */
++    char bc250_mesh_override[8];
++    bool bc250_allow_mesh_without_barycentrics =
++            vkd3d_get_env_var("VKD3D_BC250_ALLOW_MESH_WITHOUT_BARYCENTRICS",
++                    bc250_mesh_override, sizeof(bc250_mesh_override)) &&
++            !strcmp(bc250_mesh_override, "1");
++    if (bc250_allow_mesh_without_barycentrics &&
++            !device->vk_info.KHR_fragment_shader_barycentric && device->vk_info.EXT_mesh_shader)
++        WARN("BC250 opt-in: retaining mesh/task support without barycentrics.\n");
++
++    if (!bc250_allow_mesh_without_barycentrics &&
++            vkd3d_application_feature_override != VKD3D_APPLICATION_FEATURE_MESH_SHADER_WITHOUT_BARYCENTRICS &&
+             !device->vk_info.KHR_fragment_shader_barycentric && device->vk_info.EXT_mesh_shader)
+     {
+         WARN("Mesh shaders are supported, but not barycentrics. Disabling mesh shaders as a global UE5 workaround.\n");
+@@ -3400,6 +3412,8 @@ struct vkd3d_device_queue_info
+ 
+     unsigned int vk_family_count;
+     VkDeviceQueueCreateInfo vk_queue_create_info[VKD3D_QUEUE_FAMILY_COUNT];
++    unsigned int bc250_probe_mode;
++    bool bc250_original_concurrent_transfer;
+ };
+ 
+ static bool vkd3d_queue_family_needs_out_of_band_queue(unsigned int vkd3d_queue_family)
+@@ -3605,6 +3619,54 @@ static bool vkd3d_driver_has_fast_concurrent_transfer_queue(VkDriverId driver_id
+     }
+ }
+ 
++/* BC250_QUEUE_PROBE_DIAGNOSTIC_V1 */
++/* Diagnostic policy only. No Vulkan calls, GPU waits, or capability changes. */
++enum bc250_queue_probe_mode
++{
++    BC250_QUEUE_PROBE_OFF,
++    BC250_QUEUE_PROBE_OBSERVE,
++    BC250_QUEUE_PROBE_COMPUTE,
++    BC250_QUEUE_PROBE_TRANSFER,
++    BC250_QUEUE_PROBE_BOTH,
++};
++
++static int bc250_parse_queue_probe(const char *name)
++{
++    if (!name || !name[0] || !strcmp(name, "off"))
++        return BC250_QUEUE_PROBE_OFF;
++    if (!strcmp(name, "observe"))
++        return BC250_QUEUE_PROBE_OBSERVE;
++    if (!strcmp(name, "compute-to-graphics"))
++        return BC250_QUEUE_PROBE_COMPUTE;
++    if (!strcmp(name, "transfer-to-graphics"))
++        return BC250_QUEUE_PROBE_TRANSFER;
++    if (!strcmp(name, "both-to-graphics"))
++        return BC250_QUEUE_PROBE_BOTH;
++    return -1;
++}
++
++static bool bc250_probe_conflicts(int mode, bool single_queue)
++{
++    return mode < 0 || (single_queue && mode >= BC250_QUEUE_PROBE_COMPUTE);
++}
++
++static bool bc250_original_transfer_policy(bool vendor_policy, const unsigned int *families)
++{
++    return vendor_policy ||
++            families[VKD3D_QUEUE_FAMILY_TRANSFER] == families[VKD3D_QUEUE_FAMILY_COMPUTE] ||
++            families[VKD3D_QUEUE_FAMILY_TRANSFER] == families[VKD3D_QUEUE_FAMILY_GRAPHICS];
++}
++
++static void bc250_apply_queue_probe(unsigned int *families, int mode)
++{
++    const unsigned int graphics = families[VKD3D_QUEUE_FAMILY_GRAPHICS];
++    if (mode == BC250_QUEUE_PROBE_COMPUTE || mode == BC250_QUEUE_PROBE_BOTH)
++        families[VKD3D_QUEUE_FAMILY_COMPUTE] = graphics;
++    if (mode == BC250_QUEUE_PROBE_TRANSFER || mode == BC250_QUEUE_PROBE_BOTH)
++        families[VKD3D_QUEUE_FAMILY_TRANSFER] = graphics;
++    /* INTERNAL_COMPUTE and all other roles are deliberately untouched. */
++}
++
+ static HRESULT vkd3d_select_queues(const struct d3d12_device *device,
+         VkPhysicalDevice physical_device, struct vkd3d_device_queue_info *info)
+ {
+@@ -3612,11 +3674,28 @@ static HRESULT vkd3d_select_queues(const struct d3d12_device *device,
+     VkQueueFamilyProperties *queue_properties = NULL;
+     VkDeviceQueueCreateInfo *queue_info = NULL;
+     bool duplicate, single_queue;
++    char bc250_probe_env[64] = {0};
++    int bc250_probe;
+     unsigned int i, j;
+     uint32_t count;
+ 
+     memset(info, 0, sizeof(*info));
+     single_queue = !!(vkd3d_config_flags & VKD3D_CONFIG_FLAG_SINGLE_QUEUE);
++    vkd3d_get_env_var("VKD3D_BC250_QUEUE_PROBE", bc250_probe_env, sizeof(bc250_probe_env));
++    bc250_probe_env[sizeof(bc250_probe_env) - 1] = 0;
++    bc250_probe = bc250_parse_queue_probe(bc250_probe_env);
++    if (bc250_probe_conflicts(bc250_probe, single_queue))
++    {
++        ERR("BC250 queue probe: invalid mode or conflict with single_queue.\n");
++        return E_INVALIDARG;
++    }
++    if (bc250_probe != BC250_QUEUE_PROBE_OFF &&
++            device->device_info.properties2.properties.vendorID != 0x1002)
++    {
++        ERR("BC250 queue probe: refusing a non-AMD device.\n");
++        return E_INVALIDARG;
++    }
++
+ 
+     VK_CALL(vkGetPhysicalDeviceQueueFamilyProperties(physical_device, &count, NULL));
+     if (!(queue_properties = vkd3d_calloc(count, sizeof(*queue_properties))))
+@@ -3659,6 +3738,20 @@ static HRESULT vkd3d_select_queues(const struct d3d12_device *device,
+         info->family_index[VKD3D_QUEUE_FAMILY_TRANSFER] = info->family_index[VKD3D_QUEUE_FAMILY_COMPUTE];
+ 
+     info->family_index[VKD3D_QUEUE_FAMILY_INTERNAL_COMPUTE] = info->family_index[VKD3D_QUEUE_FAMILY_COMPUTE];
++    info->bc250_probe_mode = (unsigned int)bc250_probe;
++    if (bc250_probe != BC250_QUEUE_PROBE_OFF)
++    {
++        if (info->family_index[VKD3D_QUEUE_FAMILY_GRAPHICS] == VK_QUEUE_FAMILY_IGNORED)
++        {
++            vkd3d_free(queue_properties);
++            ERR("BC250 queue probe: graphics family missing.\n");
++            return E_FAIL;
++        }
++        info->bc250_original_concurrent_transfer = bc250_original_transfer_policy(
++                device->concurrent_transfer_queue, info->family_index);
++        bc250_apply_queue_probe(info->family_index, bc250_probe);
++    }
++
+ 
+     if (single_queue)
+     {
+@@ -3964,6 +4057,26 @@ static HRESULT vkd3d_create_vk_device(struct d3d12_device *device,
+         device->concurrent_transfer_queue = true;
+     }
+ 
++    if (device_queue_info.bc250_probe_mode)
++    {
++        unsigned int bc250_i;
++        if (device_queue_info.bc250_probe_mode >= BC250_QUEUE_PROBE_COMPUTE)
++            device->concurrent_transfer_queue = device_queue_info.bc250_original_concurrent_transfer;
++        INFO("BC250_QUEUE_PROBE mode=%u single=%u no_stagger=%u gfx=%u compute=%u copy=%u internal=%u concurrent_transfer=%u selection_only=1\n",
++                device_queue_info.bc250_probe_mode,
++                !!(vkd3d_config_flags & VKD3D_CONFIG_FLAG_SINGLE_QUEUE),
++                !!(vkd3d_config_flags & VKD3D_CONFIG_FLAG_NO_STAGGERED_SUBMIT),
++                device_queue_info.family_index[VKD3D_QUEUE_FAMILY_GRAPHICS],
++                device_queue_info.family_index[VKD3D_QUEUE_FAMILY_COMPUTE],
++                device_queue_info.family_index[VKD3D_QUEUE_FAMILY_TRANSFER],
++                device_queue_info.family_index[VKD3D_QUEUE_FAMILY_INTERNAL_COMPUTE],
++                !!device->concurrent_transfer_queue);
++        for (bc250_i = 0; bc250_i < device_queue_info.vk_family_count; bc250_i++)
++            INFO("BC250_QUEUE_PROBE family=%u requested_queues=%u selection_only=1\n",
++                    device_queue_info.vk_queue_create_info[bc250_i].queueFamilyIndex,
++                    device_queue_info.vk_queue_create_info[bc250_i].queueCount);
++    }
++
+     /* Create device */
+     device_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+     device_info.pNext = device->device_info.features2.pNext;

@@ -1,0 +1,13 @@
+{
+  "release": "r2-20260921",
+  "mesa_commit": "424ccf62d2247ad9aff09195e95dac6ff6c4db9f",
+  "mesa_base": "da14d65e4499e66468094be52bff9ea0915a695e",
+  "vkd3d_commit": "3dc6c269a9eaa66aca6b5e6ff958326a3bcffcb0",
+  "vkd3d_base": "212991fc2c266bc0d59f4c4ce8f80f7126508d71",
+  "proton_base": "proton-11.0-2c-x86_64",
+  "tested_kernel": "7.2.4-1.136-cachyos-bore-bc250",
+  "payload_sha256": {
+    "payload/libvulkan_radeon.so": "ee8b43e646036e6fde20040dbd18afb40da63f12b79d5c0826fcbdd9c0fae58e",
+    "payload/d3d12core.dll": "1dd2de3737fa70b2131368304c36d8fae0797fb7f3bfe1357b207c59739686c5"
+  }
+}

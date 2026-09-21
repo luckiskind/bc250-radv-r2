@@ -1,0 +1,42 @@
+[
+  {
+    "path": "khronos/SPIRV-Headers",
+    "commit": "f88a2d766840fc825af1fc065977953ba1fa4a91",
+    "diff": ""
+  },
+  {
+    "path": "khronos/Vulkan-Headers",
+    "commit": "ad9ce1235e88dc09287e19171dfac384db8ec32c",
+    "diff": ""
+  },
+  {
+    "path": "subprojects/dxil-spirv",
+    "commit": "219d770799606f15abb3c57a8a9b9d19c2ae94ca",
+    "diff": " scratch_pool.hpp       | 1 +\n subprojects/dxbc-spirv | 0\n 2 files changed, 1 insertion(+)\n"
+  },
+  {
+    "path": "subprojects/dxil-spirv/subprojects/dxbc-spirv",
+    "commit": "29c93aeecd55533a357fdd7c95be5587d1c1f506",
+    "diff": " util/util_small_vector.h | 1 +\n 1 file changed, 1 insertion(+)\n"
+  },
+  {
+    "path": "subprojects/dxil-spirv/subprojects/dxbc-spirv/submodules/spirv_headers",
+    "commit": "c8ad050fcb29e42a2f57d9f59e97488f465c436d",
+    "diff": ""
+  },
+  {
+    "path": "subprojects/dxil-spirv/third_party/SPIRV-Cross",
+    "commit": "4b7bcb7e5cf71015b3299088d22004bfe4e13a5e",
+    "diff": ""
+  },
+  {
+    "path": "subprojects/dxil-spirv/third_party/SPIRV-Tools",
+    "commit": "64f5770f59db933d46b9cad6edc42b4186409ef4",
+    "diff": ""
+  },
+  {
+    "path": "subprojects/dxil-spirv/third_party/spirv-headers",
+    "commit": "f88a2d766840fc825af1fc065977953ba1fa4a91",
+    "diff": ""
+  }
+]
