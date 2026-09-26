@@ -1,0 +1,16 @@
+{
+  "release": "performance-r4-20260926",
+  "mesa_commit": "38a3f9bb3a7119af8ab7e9ab82555e0127d5f1ce",
+  "mesa_base": "da14d65e4499e66468094be52bff9ea0915a695e",
+  "vkd3d_commit": "3dc6c269a9eaa66aca6b5e6ff958326a3bcffcb0",
+  "vkd3d_base": "212991fc2c266bc0d59f4c4ce8f80f7126508d71",
+  "proton_base": "proton-11.0-2c-x86_64",
+  "tested_kernel": "7.2.4-1.136-cachyos-bore-bc250",
+  "payload_sha256": {
+    "payload/libvulkan_radeon.so": "67fc476a4cd56aedbf0e59f16d1c71b9cacf2dce9643410ea587e03f0e4be474",
+    "payload/d3d12core.dll": "1dd2de3737fa70b2131368304c36d8fae0797fb7f3bfe1357b207c59739686c5"
+  },
+  "mesa_worktree_patch": "mesa-performance.patch",
+  "profile": "experimental-normal-routing",
+  "tested_game_observation": "Control Resonant approximately 97 FPS in user comparison scene; not a universal performance or stability guarantee"
+}
