@@ -1,3 +1,5 @@
+> **Choose a profile:** [Performance R4 (experimental)](profiles/performance/README.md) preserves the faster normal-routing Control configuration. [R2 recovery](https://github.com/luckiskind/bc250-radv-r2/releases/tag/r2-20260921) remains unchanged for Borderlands 4 and games needing containment. Selection is per game, not automatic hybrid detection; the performance launcher refuses Borderlands. Both retain documented experimental limitations.
+
 # BC250 RADV R2 — experimental per-game driver
 
 **Baseline credit: [lonewolf0622’s BC-250 Mesh Shader Patch — driconf Edition](https://github.com/lonewolf0622/BC-250-Mesh-Shader-Patch---driconf-Edition-opt-in-per-application-).** That project provided the baseline BC250 mesh-support groundwork for this work. Thanks also to the Mesa/RADV/ACO, vkd3d-proton, DXIL-SPIRV, Wine and Proton developers. This is a separate experimental continuation, not an official Mesa/Valve release or an endorsement by those authors.
